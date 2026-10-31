@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: ["", "address,undefined", "thread"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libgtest-dev
+      - name: Build
+        run: |
+          cmake -S . -B build -DSEISMO_SANITIZE="${{ matrix.sanitize }}"
+          cmake --build build -j
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+      - name: System tests
+        run: python3 tools/system_test.py build
+
+  cross-compile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake g++-aarch64-linux-gnu
+      - name: Build for aarch64
+        run: |
+          cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-linux.cmake -DSEISMO_BUILD_TESTS=OFF
+          cmake --build build-arm -j
+          file build-arm/seismo-node | grep -q aarch64
